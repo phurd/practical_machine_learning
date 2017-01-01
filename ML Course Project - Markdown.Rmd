@@ -1,0 +1,95 @@
+---
+title: "ML Course Project - Markdown"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Purpose
+
+To describe the process of feature and model selection for an accurate HAR algorithm and report on it's accuracy. 
+
+## Feature Extraction
+
+The HAR data provided for this exercise contained 160 different features per record and were a mix of both individual and aggregated metrics. Given the grain of the test set, the aggregated features, while perhaps more useful for the classification task, could not be used. This left only the metrics that could be recorded fully on each reading. 
+
+```{r cars, echo=FALSE, warning=FALSE, message=FALSE}
+set.seed(3333)
+library(caret)
+library(ggplot2)
+library(readr)
+pml_training <- read_csv("~/Coursera/Practical Machine Learning/pml-training.csv")
+bb.data <- pml_training
+bb.data <- subset(pml_training, select = c(classe, 
+                                           gyros_belt_x,	gyros_belt_y,	gyros_belt_z,	accel_belt_x,	accel_belt_y,	accel_belt_z,
+                                           gyros_arm_x, gyros_arm_y, gyros_arm_z, accel_arm_x, accel_arm_y, accel_arm_z,
+                                           gyros_dumbbell_x,	gyros_dumbbell_y,	gyros_dumbbell_z,	accel_dumbbell_x,	accel_dumbbell_y,	accel_dumbbell_z,
+                                           gyros_forearm_x,	gyros_forearm_y,	gyros_forearm_z,	accel_forearm_x,	accel_forearm_y,	accel_forearm_z))
+
+
+inTrain <- createDataPartition(y=bb.data$classe, p=0.7, list=FALSE)
+
+training <- bb.data[inTrain, ]
+validation <- bb.data[-inTrain, ]
+
+```
+
+## Feature Selection
+
+A quick look at some of the feature plots suggests that there do exist meaningful differences in the distributions between classes for the gyros and accel measurements on the belt, arm, dumbell and forearm.
+
+```{r pressure, echo=FALSE}
+# Look at the distributions of the raw data.
+featurePlot(x=training[,c("gyros_belt_x","gyros_belt_y","gyros_belt_z")],
+            y = training$classe,
+            plot="pairs")
+
+```
+
+## Model Selection
+
+Three different models were trained on the resulting data: decision trees, random forests and boosting via gbm. Leave one out cross validation with accuracy as the testing metric was used to determine the best model. Random forests performed the best with an accuracy of around 95%. This was significantly better than both boosting and decision trees.
+```{r fit rf, echo=FALSE, warning=FALSE, message=FALSE}
+
+bb.rpart.fitmod <- train(classe ~ ., data=training, method="rpart")
+bb.rf.fitmod <- train(classe ~ ., data=training, method="rf")
+bb.gbm.fitmod <- train(classe ~ ., method='gbm', data=training, verbose=FALSE)
+
+#random forests seem to be the best
+print(bb.rf.fitmod)
+bb.pred.rf <- predict(bb.rf.fitmod, validation)
+
+table(bb.pred.rf, validation$classe)
+prop.table(table(bb.pred.rf, validation$classe),1)
+
+#What about boosting
+bb.pred.gbm <- predict(bb.gbm.fitmod, validation)
+
+table(bb.pred.gbm, validation$classe)
+prop.table(table(bb.pred.gbm, validation$classe),1)
+
+#Finally, decision trees
+#What about boosting
+bb.pred.rpart <- predict(bb.rpart.fitmod, validation)
+
+table(bb.pred.rpart, validation$classe)
+prop.table(table(bb.pred.rpart, validation$classe),1)
+
+```
+
+## Out of Sample Error
+To better simulate the out-of-sample error. The trained model was applied to a validation set (30% of the overall training data) held out of the training data. The accuracy remained quite good at 90% across all the classes. The accuracy range across classes was significant, with the accuracy on class C being the lowest at just under 85% and while class E had an accuracy of 96%. 
+```{r fit, echo=FALSE}
+
+bb.pred.rf <- predict(bb.rf.fitmod, validation)
+
+t <- table(bb.pred.rf, validation$classe)
+print(t)
+print(sum(diag(t))/sum(t))
+prop.table(table(bb.pred.rf, validation$classe),1)
+
+
+
+```
